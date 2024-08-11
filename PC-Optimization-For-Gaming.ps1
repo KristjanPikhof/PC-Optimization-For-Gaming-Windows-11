@@ -172,57 +172,141 @@ function Log-Message {
 function Invoke-DiskCleanup {
     $statusLabel.Text = "Running Disk Cleanup..."
     Log-Message "Starting Disk Cleanup..."
-    # Your existing Disk Cleanup code here
-    Start-Sleep -Seconds 2  # Simulating work, remove in actual implementation
-    Log-Message "Disk Cleanup completed."
+    try {
+        Start-Process -FilePath cleanmgr -ArgumentList '/sagerun:1' -Wait
+        Log-Message "Disk Cleanup completed successfully."
+    }
+    catch {
+        Log-Message "Error during Disk Cleanup: $($_.Exception.Message)"
+    }
 }
 
 function Clear-TempFiles {
     $statusLabel.Text = "Clearing Temporary Files..."
     Log-Message "Clearing Temporary Files..."
-    # Your existing Clear Temp Files code here
-    Start-Sleep -Seconds 2  # Simulating work, remove in actual implementation
-    Log-Message "Temporary Files cleared."
+    $tempFolders = @("$env:TEMP", "$env:WINDIR\Temp")
+    foreach ($folder in $tempFolders) {
+        try {
+            Remove-Item "$folder\*" -Force -Recurse -ErrorAction SilentlyContinue
+            Log-Message "Cleared temporary files in $folder"
+        }
+        catch {
+            Log-Message ("Error clearing temporary files in {0}: {1}" -f $folder, $_.Exception.Message)
+        }
+    }
+    Log-Message "Temporary Files clearing completed."
 }
 
 function Clear-PrefetchFiles {
     $statusLabel.Text = "Clearing Prefetch Files..."
     Log-Message "Clearing Prefetch Files..."
-    # Your existing Clear Prefetch Files code here
-    Start-Sleep -Seconds 2  # Simulating work, remove in actual implementation
-    Log-Message "Prefetch Files cleared."
+    try {
+        Remove-Item "$env:WINDIR\Prefetch\*" -Force -ErrorAction SilentlyContinue
+        Log-Message "Prefetch Files cleared successfully."
+    }
+    catch {
+        Log-Message "Error clearing Prefetch Files: $($_.Exception.Message)"
+    }
 }
 
 function Clear-WindowsUpdateCache {
     $statusLabel.Text = "Clearing Windows Update Cache..."
     Log-Message "Clearing Windows Update Cache..."
-    # Your existing Clear Windows Update Cache code here
-    Start-Sleep -Seconds 2  # Simulating work, remove in actual implementation
-    Log-Message "Windows Update Cache cleared."
+    try {
+        $service = Get-Service -Name wuauserv
+
+        if ($service.Status -eq 'Running') {
+            Log-Message "Attempting to stop Windows Update service..."
+            Stop-Service -Name wuauserv -Force -ErrorAction Stop
+            Log-Message "Windows Update service stopped successfully."
+        } else {
+            Log-Message "Windows Update service is not running."
+        }
+
+        Remove-Item "$env:WINDIR\SoftwareDistribution\*" -Recurse -Force -ErrorAction Stop
+        Log-Message "Windows Update cache files removed successfully."
+
+        if ($service.Status -eq 'Stopped') {
+            Log-Message "Attempting to start Windows Update service..."
+            Start-Service -Name wuauserv -ErrorAction Stop
+            Log-Message "Windows Update service started successfully."
+        }
+
+        Log-Message "Windows Update Cache cleared successfully."
+    }
+    catch {
+        Log-Message ("Error clearing Windows Update Cache: {0}" -f $_.Exception.Message)
+        
+        if ($service.Status -eq 'Stopped') {
+            try {
+                Start-Service -Name wuauserv -ErrorAction Stop
+                Log-Message "Windows Update service restarted after error."
+            }
+            catch {
+                Log-Message ("Failed to restart Windows Update service: {0}" -f $_.Exception.Message)
+            }
+        }
+    }
 }
 
 function Clear-NVIDIACaches {
     $statusLabel.Text = "Clearing NVIDIA Caches..."
     Log-Message "Clearing NVIDIA Caches..."
-    # Your existing Clear NVIDIA Caches code here
-    Start-Sleep -Seconds 2  # Simulating work, remove in actual implementation
-    Log-Message "NVIDIA Caches cleared."
+    $nvidiaCachePaths = @(
+        "$env:LOCALAPPDATA\NVIDIA\GLCache",
+        "$env:TEMP\NVIDIA Corporation\NV_Cache"
+    )
+    foreach ($path in $nvidiaCachePaths) {
+        try {
+            if (Test-Path $path) {
+                Remove-Item "$path\*" -Recurse -Force -ErrorAction SilentlyContinue
+                Log-Message "Cleared NVIDIA cache in $path"
+            }
+        }
+        catch {
+            Log-Message ("Error clearing NVIDIA cache in {0}: {1}" -f $path, $_.Exception.Message)
+        }
+    }
+    Log-Message "NVIDIA Caches clearing completed."
 }
 
 function Clear-DNSCache {
     $statusLabel.Text = "Clearing DNS Cache..."
     Log-Message "Clearing DNS Cache..."
-    # Your existing Clear DNS Cache code here
-    Start-Sleep -Seconds 2  # Simulating work, remove in actual implementation
-    Log-Message "DNS Cache cleared."
+    try {
+        Clear-DnsClientCache
+        Log-Message "DNS Cache cleared successfully."
+    }
+    catch {
+        Log-Message "Error clearing DNS Cache: $($_.Exception.Message)"
+    }
 }
 
 function Clear-RecycleBin {
     $statusLabel.Text = "Emptying Recycle Bin..."
     Log-Message "Emptying Recycle Bin..."
-    # Your existing Empty Recycle Bin code here
-    Start-Sleep -Seconds 2  # Simulating work, remove in actual implementation
-    Log-Message "Recycle Bin emptied."
+    try {
+        $shell = New-Object -ComObject Shell.Application
+        $recycleBin = $shell.Namespace(0xA)
+        $itemsInBin = $recycleBin.Items().Count
+        
+        if ($itemsInBin -eq 0) {
+            Log-Message "Recycle Bin is already empty."
+        } else {
+            $recykleBin.Items() | ForEach-Object { Remove-Item $_.Path -Recurse -Force }
+            Log-Message "Recycle Bin emptied successfully. $itemsInBin item(s) removed."
+        }
+    }
+    catch {
+        Log-Message ("Error emptying Recycle Bin: {0}" -f $_.Exception.Message)
+    }
+    finally {
+        if ($null -ne $shell) {
+            [System.Runtime.Interopservices.Marshal]::ReleaseComObject($shell) | Out-Null
+        }
+        [System.GC]::Collect()
+        [System.GC]::WaitForPendingFinalizers()
+    }
 }
 
 function Set-CloudflareDNS {
@@ -233,28 +317,39 @@ function Set-CloudflareDNS {
     
     foreach ($adapter in $networkAdapters) {
         try {
+            $adapterName = $adapter.Description
             $currentDNS = $adapter.DNSServerSearchOrder
+            
+            Log-Message "Checking adapter: $adapterName"
             
             # Check if DNS is already set to Cloudflare
             if ($currentDNS -contains "1.1.1.1" -and $currentDNS -contains "1.0.0.1") {
-                Log-Message "Cloudflare DNS already set for adapter: $($adapter.Description). Skipping."
+                Log-Message "Cloudflare DNS already set for adapter: $adapterName. Skipping."
+                continue
+            }
+
+            # Get the current adapter status
+            $netAdapter = Get-NetAdapter | Where-Object { $_.InterfaceDescription -eq $adapterName }
+            if ($netAdapter.Status -ne "Up") {
+                Log-Message "Adapter $adapterName is not in 'Up' state. Current state: $($netAdapter.Status). Skipping."
                 continue
             }
 
             $result = $adapter.SetDNSServerSearchOrder(@("1.1.1.1", "1.0.0.1"))
             
             if ($result.ReturnValue -eq 0) {
-                Log-Message "Cloudflare DNS set for adapter: $($adapter.Description)"
+                Log-Message "Cloudflare DNS set successfully for adapter: $adapterName"
             } else {
-                Log-Message "Failed to set Cloudflare DNS for adapter: $($adapter.Description). Error code: $($result.ReturnValue)"
+                Log-Message "Failed to set Cloudflare DNS for adapter: $adapterName. Error code: $($result.ReturnValue)"
+                Log-Message "Current DNS servers: $($currentDNS -join ', ')"
             }
         }
         catch {
-            Log-Message "Error setting Cloudflare DNS for adapter: $($adapter.Description). Error: $($_.Exception.Message)"
+            Log-Message "Error setting Cloudflare DNS for adapter: $adapterName. Error: $($_.Exception.Message)"
         }
     }
     
-    Log-Message "Cloudflare DNS setting completed."
+    Log-Message "Cloudflare DNS setting process completed."
 }
 
 $form.ShowDialog()
