@@ -165,8 +165,12 @@ $form.Controls.Add($openSourceLabel)
 
 function Log-Message {
     param([string]$message)
-    $logTextBox.AppendText("$message`r`n")
-    $logTextBox.ScrollToCaret()
+    if ($logTextBox -and $logTextBox.IsHandleCreated) {
+        $logTextBox.Invoke([Action]{
+            $logTextBox.AppendText("$message`r`n")
+            $logTextBox.ScrollToCaret()
+        })
+    }
 }
 
 function Invoke-DiskCleanup {
@@ -284,28 +288,21 @@ function Clear-DNSCache {
 
 function Clear-RecycleBin {
     $statusLabel.Text = "Emptying Recycle Bin..."
-    Log-Message "Emptying Recycle Bin..."
+    Log-Message "Starting to empty Recycle Bin..."
     try {
-        $shell = New-Object -ComObject Shell.Application
-        $recycleBin = $shell.Namespace(0xA)
-        $itemsInBin = $recycleBin.Items().Count
+        $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c rd /s /q C:\`$Recycle.Bin" -WindowStyle Hidden -PassThru -Wait
         
-        if ($itemsInBin -eq 0) {
-            Log-Message "Recycle Bin is already empty."
+        if ($process.ExitCode -eq 0) {
+            Log-Message "Recycle Bin emptied successfully."
         } else {
-            $recykleBin.Items() | ForEach-Object { Remove-Item $_.Path -Recurse -Force }
-            Log-Message "Recycle Bin emptied successfully. $itemsInBin item(s) removed."
+            Log-Message "Failed to empty Recycle Bin. Exit code: $($process.ExitCode)"
         }
     }
     catch {
         Log-Message ("Error emptying Recycle Bin: {0}" -f $_.Exception.Message)
     }
     finally {
-        if ($null -ne $shell) {
-            [System.Runtime.Interopservices.Marshal]::ReleaseComObject($shell) | Out-Null
-        }
-        [System.GC]::Collect()
-        [System.GC]::WaitForPendingFinalizers()
+        $statusLabel.Text = "Recycle Bin operation completed."
     }
 }
 
