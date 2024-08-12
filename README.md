@@ -21,15 +21,23 @@ The primary goal of this script is to help users clean their PCs faster and more
 
 2. **Download the Script**: Save the provided script in a `.ps1` file (e.g., `PC_Optimization_Script.ps1`).
 
-3. **Run the Script**: 
-   - Locate the saved `.ps1` file.
-   - Right-click on the file and select **Run with PowerShell**.
-   - If prompted, confirm any security warnings.
+3. **Execute the Script**: 
+   - Find the saved `.ps1` file.
+   - Right-click on the file and choose **Run with PowerShell**.
+   - If the option **Run with PowerShell** is unavailable, open PowerShell with administrator privileges and save the script to `C:/`. You can then run it in the console by entering:
+   ```
+     C:\PC-Optimization-For-Gaming.ps1
+   ```
 
 4. **If Needed: Set Execution Policy**: If you face issues running the script, you might need to set the execution policy to allow the running of scripts. 
    - Open PowerShell as an administrator and execute:
    ```powershell
    Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+   ```
+5. **When you run a .ps1 PowerShell script you might get the message saying “.ps1 is not digitally signed. The script will not execute on the system.”**
+   - To fix it you have to run the command below to run Set-ExecutionPolicy and change the Execution Policy setting.
+   ```powershell
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
    ```
 
 ## Images
@@ -37,5 +45,4 @@ The primary goal of this script is to help users clean their PCs faster and more
 
 
 ## About
-
 This is an open-source code created by Esmaabi. If you wish to support the development, please check out the project repository: GitHub Repository.
