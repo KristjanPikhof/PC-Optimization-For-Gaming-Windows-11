@@ -29,7 +29,8 @@ The primary goal of this script is to help users clean their PCs faster and more
 4. **If Needed: Set Execution Policy**: If you face issues running the script, you might need to set the execution policy to allow the running of scripts. 
    - Open PowerShell as an administrator and execute:
    ```powershell
-   Set-ExecutionPolicy RemoteSigned -Scope CurrentUser```
+   Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+   ```
 
 ## About
 
