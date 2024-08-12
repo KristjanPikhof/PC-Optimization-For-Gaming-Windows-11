@@ -32,6 +32,10 @@ The primary goal of this script is to help users clean their PCs faster and more
    Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
    ```
 
+## Images
+![image](https://github.com/user-attachments/assets/86fa0020-0e2a-45fc-bb62-7bde0ea59b8e)
+
+
 ## About
 
 This is an open-source code created by Esmaabi. If you wish to support the development, please check out the project repository: GitHub Repository.
