@@ -1,7 +1,12 @@
+if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))
+{   
+    [System.Windows.Forms.MessageBox]::Show("Please run this script as an Administrator.", "Admin Rights Required", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+    exit
+}
+
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-# Custom colors
 $primaryColor = [System.Drawing.Color]::FromArgb(63, 81, 181)
 $accentColor = [System.Drawing.Color]::FromArgb(255, 64, 129)
 $backgroundColor = [System.Drawing.Color]::White
@@ -90,30 +95,47 @@ $runButton.ForeColor = $backgroundColor
 $runButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $runButton.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 $runButton.Add_Click({
-    $selectedTasks = $checkboxes | Where-Object { $_.Checked } | ForEach-Object { $_.Text }
-    $progressBar.Value = 0
-    $statusLabel.Text = "Starting optimization..."
-    $runButton.Enabled = $false
-    $cancelButton.Enabled = $false
+    try {
+        $selectedTasks = $checkboxes | Where-Object { $_.Checked } | ForEach-Object { $_.Text }
+        $progressBar.Value = 0
+        $statusLabel.Text = "Starting optimization..."
+        $runButton.Enabled = $false
+        $cancelButton.Enabled = $false
 
-    foreach ($task in $selectedTasks) {
-        switch ($task) {
-            "Configure and Run Disk Cleanup" { Invoke-DiskCleanup }
-            "Clear Temporary Files" { Clear-TempFiles }
-            "Clear Prefetch Files" { Clear-PrefetchFiles }
-            "Clear Windows Update Cache" { Clear-WindowsUpdateCache }
-            "Clear NVIDIA Caches" { Clear-NVIDIACaches }
-            "Clear DNS Cache" { Clear-DNSCache }
-            "Empty Recycle Bin" { Clear-RecycleBin }
-            "Set Cloudflare DNS (Fastest)" { Set-CloudflareDNS }
+        foreach ($task in $selectedTasks) {
+            $startTime = Get-Date
+            switch ($task) {
+                "Configure and Run Disk Cleanup" { Invoke-DiskCleanup }
+                "Clear Temporary Files" { Clear-TempFiles }
+                "Clear Prefetch Files" { Clear-PrefetchFiles }
+                "Clear Windows Update Cache" { Clear-WindowsUpdateCache }
+                "Clear NVIDIA Caches" { Clear-NVIDIACaches }
+                "Clear DNS Cache" { Clear-DNSCache }
+                "Empty Recycle Bin" { Clear-RecycleBin }
+                "Set Cloudflare DNS (Fastest)" { Set-CloudflareDNS }
+            }
+            $endTime = Get-Date
+            $duration = $endTime - $startTime
+            Log-Message ("Task '{0}' completed in {1:N2} seconds." -f $task, $duration.TotalSeconds)
+            $progressBar.Value += (100 / $selectedTasks.Count)
         }
-        $progressBar.Value += (100 / $selectedTasks.Count)
-    }
 
-    $progressBar.Value = 100
-    $statusLabel.Text = "Optimization completed! You can now close the application."
-    $runButton.Enabled = $true
-    $cancelButton.Enabled = $true
+        $progressBar.Value = 100
+        $statusLabel.Text = "Optimization completed! You can now close the application."
+        $runButton.Enabled = $true
+        $cancelButton.Enabled = $true
+
+        $rebootPrompt = [System.Windows.Forms.MessageBox]::Show("Do you want to reboot your system now?", "Reboot Required", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
+        if ($rebootPrompt -eq 'Yes') {
+            Restart-Computer -Force
+        }
+    }
+    catch {
+        Log-Message "An unexpected error occurred: $($_.Exception.Message)"
+        $statusLabel.Text = "An error occurred. Please check the log."
+        $runButton.Enabled = $true
+        $cancelButton.Enabled = $true
+    }
 })
 $form.Controls.Add($runButton)
 
@@ -310,36 +332,24 @@ function Set-CloudflareDNS {
     $statusLabel.Text = "Setting Cloudflare DNS..."
     Log-Message "Setting Cloudflare DNS..."
     
-    $networkAdapters = Get-WmiObject Win32_NetworkAdapterConfiguration | Where-Object { $_.IPEnabled -eq $true }
+    $networkAdapters = Get-NetAdapter | Where-Object { $_.Status -eq "Up" }
     
     foreach ($adapter in $networkAdapters) {
         try {
-            $adapterName = $adapter.Description
-            $currentDNS = $adapter.DNSServerSearchOrder
-            
+            $adapterName = $adapter.Name
             Log-Message "Checking adapter: $adapterName"
             
-            # Check if DNS is already set to Cloudflare
-            if ($currentDNS -contains "1.1.1.1" -and $currentDNS -contains "1.0.0.1") {
-                Log-Message "Cloudflare DNS already set for adapter: $adapterName. Skipping."
-                continue
-            }
+            $outputIPv4Primary = netsh interface ipv4 set dns name="$adapterName" static 1.1.1.1 primary
+            $outputIPv4Secondary = netsh interface ipv4 add dns name="$adapterName" 1.0.0.1 index=2
+            Log-Message ("IPv4 DNS set result for {0}:" -f $adapterName)
+            Log-Message ("  Primary: {0}" -f ($outputIPv4Primary -join " "))
+            Log-Message ("  Secondary: {0}" -f ($outputIPv4Secondary -join " "))
 
-            # Get the current adapter status
-            $netAdapter = Get-NetAdapter | Where-Object { $_.InterfaceDescription -eq $adapterName }
-            if ($netAdapter.Status -ne "Up") {
-                Log-Message "Adapter $adapterName is not in 'Up' state. Current state: $($netAdapter.Status). Skipping."
-                continue
-            }
-
-            $result = $adapter.SetDNSServerSearchOrder(@("1.1.1.1", "1.0.0.1"))
-            
-            if ($result.ReturnValue -eq 0) {
-                Log-Message "Cloudflare DNS set successfully for adapter: $adapterName"
-            } else {
-                Log-Message "Failed to set Cloudflare DNS for adapter: $adapterName. Error code: $($result.ReturnValue)"
-                Log-Message "Current DNS servers: $($currentDNS -join ', ')"
-            }
+            $outputIPv6Primary = netsh interface ipv6 set dns name="$adapterName" static 2606:4700:4700::1111 primary
+            $outputIPv6Secondary = netsh interface ipv6 add dns name="$adapterName" 2606:4700:4700::1001 index=2
+            Log-Message ("IPv6 DNS set result for {0}:" -f $adapterName)
+            Log-Message ("  Primary: {0}" -f ($outputIPv6Primary -join " "))
+            Log-Message ("  Secondary: {0}" -f ($outputIPv6Secondary -join " "))
         }
         catch {
             Log-Message "Error setting Cloudflare DNS for adapter: $adapterName. Error: $($_.Exception.Message)"
@@ -347,6 +357,36 @@ function Set-CloudflareDNS {
     }
     
     Log-Message "Cloudflare DNS setting process completed."
+    
+    Log-Message "Verifying DNS settings:"
+    $dnsServers = Get-DnsClientServerAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -eq $adapterName }
+    Log-Message ("Current IPv4 DNS servers for {0}: {1}" -f $adapterName, ($dnsServers.ServerAddresses -join ", "))
+    
+    $dnsServersV6 = Get-DnsClientServerAddress -AddressFamily IPv6 | Where-Object { $_.InterfaceAlias -eq $adapterName }
+    Log-Message ("Current IPv6 DNS servers for {0}: {1}" -f $adapterName, ($dnsServersV6.ServerAddresses -join ", "))
 }
+
+function Save-LogToFile {
+    $saveFileDialog = New-Object System.Windows.Forms.SaveFileDialog
+    $saveFileDialog.Filter = "Text Files (*.txt)|*.txt"
+    $saveFileDialog.Title = "Save Log File"
+    $saveFileDialog.ShowDialog()
+
+    if ($saveFileDialog.FileName -ne "") {
+        $logTextBox.Text | Out-File $saveFileDialog.FileName
+        [System.Windows.Forms.MessageBox]::Show("Log saved successfully!", "Save Log", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+    }
+}
+
+$saveLogButton = New-Object System.Windows.Forms.Button
+$saveLogButton.Location = [System.Drawing.Point]::new(280, 400)
+$saveLogButton.Size = New-Object System.Drawing.Size(120, 35)
+$saveLogButton.Text = "Save Log"
+$saveLogButton.BackColor = $primaryColor
+$saveLogButton.ForeColor = $backgroundColor
+$saveLogButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+$saveLogButton.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+$saveLogButton.Add_Click({ Save-LogToFile })
+$form.Controls.Add($saveLogButton)
 
 $form.ShowDialog()
