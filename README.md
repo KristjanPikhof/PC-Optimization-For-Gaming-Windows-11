@@ -22,9 +22,9 @@ The primary goal of this script is to help users clean their PCs faster and more
 2. **Download the Script**: Save the provided script in a `.ps1` file (e.g., `PC_Optimization_Script.ps1`).
 
 3. **Execute the Script**: 
-   - Find the saved `.ps1` file.
-   - Right-click on the file and choose **Run with PowerShell**.
-   - If the option **Run with PowerShell** is unavailable, open PowerShell with administrator privileges and save the script to `C:/`. You can then run it in the console by entering:
+   - Find the saved `.ps1` file. It's easiest to just save on `C:/`
+   - Open PowerShell as **Administratorl** in the same directory (e.g., `C:/`)
+   - You can then run it in the console by entering:
    ```
      C:\PC-Optimization-For-Gaming.ps1
    ```
@@ -41,7 +41,8 @@ The primary goal of this script is to help users clean their PCs faster and more
    ```
 
 ## Images
-![image](https://github.com/user-attachments/assets/86fa0020-0e2a-45fc-bb62-7bde0ea59b8e)
+![image](https://github.com/user-attachments/assets/05431978-df4e-4332-bc5b-915f98c3a507)
+
 
 
 ## About
